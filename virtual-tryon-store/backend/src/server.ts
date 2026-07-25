@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
-import mongoose from "mongoose";
 import dotenv from "dotenv";
+import { supabase } from "./config/supabase";
 import productRoutes from "./routes/products.routes";
 import tryonRoutes from "./routes/tryon.routes";
 import authRoutes from "./routes/auth.routes";
@@ -18,14 +18,18 @@ app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/tryon", tryonRoutes);
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/tryon";
-
 const PORT = parseInt(process.env.PORT || "5001");
 
-mongoose.connect(MONGO_URI).then(() => {
-  console.log("Connected to MongoDB");
+async function start() {
+  const { error } = await supabase.from("users").select("id").limit(1);
+  if (error && error.code === "42P01") {
+    console.log("Note: Tables not yet created. Please run the SQL migrations in Supabase dashboard.");
+  } else if (error) {
+    console.error("Supabase connection error:", error.message);
+  } else {
+    console.log("Connected to Supabase");
+  }
   app.listen(PORT, () => console.log(`API running on :${PORT}`));
-}).catch((err) => {
-  console.error("MongoDB connection error:", err);
-  process.exit(1);
-});
+}
+
+start();

@@ -13,8 +13,8 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
 
   try {
     const token = header.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { id: string };
-    req.userId = decoded.id;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { sub?: string; id?: string };
+    req.userId = decoded.sub || decoded.id;
     next();
   } catch {
     return res.status(401).json({ error: "Invalid token" });
