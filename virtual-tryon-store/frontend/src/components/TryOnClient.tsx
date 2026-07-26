@@ -3,7 +3,6 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import PhotoUploader from "@/components/PhotoUploader";
 import Viewer3D from "@/components/Viewer3D";
-import { API_URL } from "@/lib/api";
 
 export default function TryOnClient() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -17,7 +16,7 @@ export default function TryOnClient() {
     if (!avatarUrl || !garmentModelUrl) return;
     setFitting(true);
     setError(null);
-    const res = await fetch(`${API_URL}/api/tryon/fit-garment`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tryon/fit-garment`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ avatarUrl, garmentModelUrl })

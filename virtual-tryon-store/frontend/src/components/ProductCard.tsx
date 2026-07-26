@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 interface Product {
-  _id: string;
+  id: string;
   name: string;
   brand: string;
   price: number;
@@ -11,7 +11,7 @@ interface Product {
 
 export default function ProductCard({ product }: { product: Product }) {
   return (
-    <Link href={`/products/${product._id}`} className="group block">
+    <Link href={`/products/${product.id}`} className="group block">
       <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden">
         {product.images?.[0] ? (
           <img

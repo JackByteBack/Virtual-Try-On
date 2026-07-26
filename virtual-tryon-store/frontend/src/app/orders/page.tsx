@@ -6,22 +6,22 @@ import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 
 export default function OrdersPage() {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || !token) {
+    if (!user) {
       router.push("/login");
       return;
     }
     loadOrders();
-  }, [user, token]);
+  }, [user]);
 
   async function loadOrders() {
     try {
-      const data = await api.orders.me(token!);
+      const data = await api.orders.me();
       setOrders(data);
     } catch (err) {
       console.error("Failed to load orders:", err);
@@ -68,12 +68,12 @@ export default function OrdersPage() {
       ) : (
         <div className="space-y-4">
           {orders.map((order) => (
-            <div key={order._id} className="bg-white border border-gray-200 rounded-lg p-6">
+            <div key={order.id} className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <p className="text-sm text-gray-500">Order #{order._id.slice(-8).toUpperCase()}</p>
+                  <p className="text-sm text-gray-500">Order #{order.id.slice(-8).toUpperCase()}</p>
                   <p className="text-sm text-gray-500">
-                    {new Date(order.createdAt).toLocaleDateString()}
+                    {new Date(order.created_at).toLocaleDateString()}
                   </p>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[order.status] || "bg-gray-100 text-gray-800"}`}>
@@ -85,10 +85,10 @@ export default function OrdersPage() {
                 {order.items?.map((item: any, idx: number) => (
                   <div key={idx} className="flex justify-between text-sm">
                     <span className="text-gray-600">
-                      {item.productId?.name || "Product"} ({item.size}) x {item.qty}
+                      {item.product?.name || "Product"} ({item.size}) x {item.qty}
                     </span>
                     <span className="text-gray-900">
-                      ${((item.productId?.price || 0) * item.qty).toFixed(2)}
+                      ${((item.product?.price || 0) * item.qty).toFixed(2)}
                     </span>
                   </div>
                 ))}

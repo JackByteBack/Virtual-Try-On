@@ -12,7 +12,7 @@ export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { addItem } = useCart();
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [product, setProduct] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState("");
@@ -37,7 +37,7 @@ export default function ProductDetailPage() {
   }
 
   async function handleTryOn() {
-    if (!token) {
+    if (!user) {
       router.push("/login");
       return;
     }
@@ -48,14 +48,14 @@ export default function ProductDetailPage() {
       return;
     }
 
-    if (!product?.garmentModelUrl) {
+    if (!product?.garment_model_url) {
       alert("3D garment model not available for this product");
       return;
     }
 
     setFitting(true);
     try {
-      const data = await api.tryon.fitGarment(avatarUrl, product.garmentModelUrl, token);
+      const data = await api.tryon.fitGarment(avatarUrl, product.garment_model_url);
       setCombinedModelUrl(data.combinedModelUrl);
     } catch (err) {
       console.error("Garment fitting failed:", err);
@@ -71,7 +71,7 @@ export default function ProductDetailPage() {
       return;
     }
     addItem({
-      productId: product._id,
+      productId: product.id,
       name: product.name,
       price: product.price,
       size: selectedSize,
@@ -175,7 +175,7 @@ export default function ProductDetailPage() {
 
               <button
                 onClick={handleTryOn}
-                disabled={fitting || !product.garmentModelUrl}
+                disabled={fitting || !product.garment_model_url}
                 className="w-full border border-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {fitting ? (
@@ -192,7 +192,7 @@ export default function ProductDetailPage() {
               </button>
             </div>
 
-            {!product.garmentModelUrl && (
+            {!product.garment_model_url && (
               <p className="text-sm text-gray-500">3D try-on not available for this product</p>
             )}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { api } from "@/lib/api";
+import { insforge } from "@/lib/insforge";
 
 interface User {
   id: string;
@@ -11,55 +11,82 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
-  logout: () => void;
+  verifyEmail: (email: string, otp: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
+  logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const savedToken = localStorage.getItem("token");
-    const savedUser = localStorage.getItem("user");
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
+  async function refreshUser() {
+    try {
+      const { data } = await insforge.auth.getCurrentUser();
+      if (data.user) {
+        setUser({
+          id: data.user.id,
+          name: (data.user as Record<string, unknown>).profile && typeof (data.user as Record<string, unknown>).profile === 'object'
+            ? ((data.user as Record<string, unknown>).profile as Record<string, string>).name || ""
+            : "",
+          email: data.user.email || "",
+        });
+      } else {
+        setUser(null);
+      }
+    } catch {
+      setUser(null);
     }
-    setLoading(false);
+  }
+
+  useEffect(() => {
+    refreshUser().finally(() => setLoading(false));
   }, []);
 
   async function login(email: string, password: string) {
-    const data = await api.auth.login({ email, password });
-    setToken(data.token);
-    setUser(data.user);
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
+    const { error } = await insforge.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    await refreshUser();
   }
 
   async function register(name: string, email: string, password: string) {
-    const data = await api.auth.register({ name, email, password });
-    setToken(data.token);
-    setUser(data.user);
-    localStorage.setItem("token", data.token);
-    localStorage.setItem("user", JSON.stringify(data.user));
+    const { data, error } = await insforge.auth.signUp({
+      email,
+      password,
+      name,
+    });
+    if (error) throw error;
+    if (data?.accessToken) {
+      await refreshUser();
+    }
   }
 
-  function logout() {
-    setToken(null);
+  async function verifyEmail(email: string, otp: string) {
+    const { data, error } = await insforge.auth.verifyEmail({ email, otp });
+    if (error) throw error;
+    if (data?.accessToken) {
+      await refreshUser();
+    }
+  }
+
+  async function resendVerification(email: string) {
+    const { error } = await insforge.auth.resendVerificationEmail({ email });
+    if (error) throw error;
+  }
+
+  async function logout() {
+    await insforge.auth.signOut();
     setUser(null);
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, verifyEmail, resendVerification, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

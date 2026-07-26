@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 
 export default function CheckoutPage() {
   const { items, total, clearCart } = useCart();
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +25,6 @@ export default function CheckoutPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!token) return;
 
     setLoading(true);
     setError(null);
@@ -37,7 +36,7 @@ export default function CheckoutPage() {
         qty: item.qty,
       }));
 
-      await api.orders.create(orderItems, token);
+      await api.orders.create(orderItems);
       clearCart();
       router.push("/orders");
     } catch (err: any) {

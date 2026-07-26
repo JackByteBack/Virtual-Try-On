@@ -1,89 +1,125 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+import { insforge } from "@/lib/insforge";
 
-interface RequestOptions extends RequestInit {
-  token?: string;
-}
+export type Product = {
+  id: string;
+  name: string;
+  brand?: string;
+  price: number;
+  images: string[];
+  garment_model_url: string;
+  sizes: string[];
+  category?: string;
+};
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { token, ...fetchOptions } = options;
-  const headers: Record<string, string> = {
-    ...((fetchOptions.headers as Record<string, string>) || {}),
-  };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...fetchOptions,
-    headers,
-  });
-
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(error.error || `HTTP ${res.status}`);
-  }
-
-  return res.json();
-}
+let accessToken: string | null = null;
 
 export const api = {
   auth: {
-    register: (data: { name: string; email: string; password: string }) =>
-      request<{ token: string; user: { id: string; name: string; email: string } }>("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      }),
-    login: (data: { email: string; password: string }) =>
-      request<{ token: string; user: { id: string; name: string; email: string } }>("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      }),
+    register: async (data: { name: string; email: string; password: string }) => {
+      const { data: authData, error } = await insforge.auth.signUp({
+        email: data.email,
+        password: data.password,
+        name: data.name,
+      });
+      if (error) throw error;
+      if (authData?.accessToken) accessToken = authData.accessToken;
+      return authData;
+    },
+    login: async (data: { email: string; password: string }) => {
+      const { data: authData, error } = await insforge.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
+      if (error) throw error;
+      if (authData?.accessToken) accessToken = authData.accessToken;
+      return authData;
+    },
+    getAccessToken: () => accessToken,
   },
 
   products: {
-    list: (params?: { category?: string; brand?: string; search?: string }) => {
-      const query = new URLSearchParams();
-      if (params?.category) query.set("category", params.category);
-      if (params?.brand) query.set("brand", params.brand);
-      if (params?.search) query.set("search", params.search);
-      const qs = query.toString();
-      return request<any[]>(`/api/products${qs ? `?${qs}` : ""}`);
+    list: async (params?: { category?: string; brand?: string; search?: string }) => {
+      let query = insforge.database.from("products").select("*");
+      if (params?.category) query = query.eq("category", params.category);
+      if (params?.brand) query = query.eq("brand", params.brand);
+      if (params?.search) query = query.ilike("name", `%${params.search}%`);
+      const { data, error } = await query.order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as Product[];
     },
-    get: (id: string) => request<any>(`/api/products/${id}`),
-    create: (data: any, token: string) =>
-      request<any>("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        token,
-      }),
+    get: async (id: string) => {
+      const { data, error } = await insforge.database
+        .from("products")
+        .select("*")
+        .eq("id", id)
+        .single();
+      if (error) throw error;
+      return data as Product;
+    },
+    create: async (product: Omit<Product, "id">) => {
+      const { data, error } = await insforge.database
+        .from("products")
+        .insert([product])
+        .select()
+        .single();
+      if (error) throw error;
+      return data as Product;
+    },
   },
 
   orders: {
-    create: (items: { productId: string; size: string; qty: number }[], token: string) =>
-      request<any>("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
-        token,
-      }),
-    me: (token: string) => request<any[]>("/api/orders/me", { token }),
+    create: async (items: { productId: string; size: string; qty: number }[]) => {
+      const { data } = await insforge.auth.getCurrentUser();
+      if (!data.user) throw new Error("Not authenticated");
+
+      let total = 0;
+      for (const item of items) {
+        const { data: product } = await insforge.database
+          .from("products")
+          .select("price")
+          .eq("id", item.productId)
+          .single();
+        if (product) total += product.price * item.qty;
+      }
+
+      const { data: order, error } = await insforge.database
+        .from("orders")
+        .insert([{
+          user_id: data.user.id,
+          items,
+          total,
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      return order;
+    },
+    me: async () => {
+      const { data } = await insforge.auth.getCurrentUser();
+      if (!data.user) throw new Error("Not authenticated");
+
+      const { data: orders, error } = await insforge.database
+        .from("orders")
+        .select("*, items:order_items(*, product:products(*))")
+        .eq("user_id", data.user.id)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return orders;
+    },
   },
 
   tryon: {
-    generateAvatar: async (files: { front: File; back: File; left: File; right: File }, token: string) => {
+    generateAvatar: async (files: { front: File; back: File; left: File; right: File }) => {
       const form = new FormData();
       form.append("front", files.front);
       form.append("back", files.back);
       form.append("left", files.left);
       form.append("right", files.right);
 
-      const res = await fetch(`${API_BASE}/api/tryon/generate-avatar`, {
+      if (!accessToken) throw new Error("Not authenticated");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tryon/generate-avatar`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
         body: form,
       });
 
@@ -91,33 +127,19 @@ export const api = {
       return res.json();
     },
 
-    fitGarment: (avatarUrl: string, garmentModelUrl: string, token: string) =>
-      request<{ combinedModelUrl: string }>("/api/tryon/fit-garment", {
+    fitGarment: async (avatarUrl: string, garmentModelUrl: string) => {
+      if (!accessToken) throw new Error("Not authenticated");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tryon/fit-garment`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({ avatarUrl, garmentModelUrl }),
-        token,
-      }),
+      });
+
+      if (!res.ok) throw new Error("Garment fitting failed");
+      return res.json();
+    },
   },
 };
-
-export const API_URL = API_BASE;
-
-export type Product = {
-  _id: string;
-  name: string;
-  brand?: string;
-  price: number;
-  images: string[];
-  garmentModelUrl: string;
-  sizes: string[];
-  category?: string;
-};
-
-export async function getProducts(): Promise<Product[]> {
-  return api.products.list();
-}
-
-export async function getProductById(id: string): Promise<Product> {
-  return api.products.get(id);
-}
