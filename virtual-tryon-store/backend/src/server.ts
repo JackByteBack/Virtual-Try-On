@@ -6,6 +6,7 @@ import productRoutes from "./routes/products.routes";
 import tryonRoutes from "./routes/tryon.routes";
 import authRoutes from "./routes/auth.routes";
 import orderRoutes from "./routes/orders.routes";
+import scrapeRoutes from "./routes/scrape.routes";
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/tryon", tryonRoutes);
+app.use("/api/scrape", scrapeRoutes);
 
 const PORT = parseInt(process.env.PORT || "5001");
 

@@ -22,7 +22,12 @@ export default function LoginPage() {
       await login(email, password);
       router.push("/");
     } catch (err: any) {
-      setError(err.message || "Login failed");
+      const message = err.message || "Login failed";
+      if (message.toLowerCase().includes("email verification")) {
+        router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+        return;
+      }
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -75,6 +80,12 @@ export default function LoginPage() {
           Don&apos;t have an account?{" "}
           <Link href="/register" className="text-black font-medium hover:underline">
             Register
+          </Link>
+        </p>
+        <p className="text-center text-gray-500 text-sm mt-2">
+          Need to verify your email?{" "}
+          <Link href={`/verify-email?email=${encodeURIComponent(email)}`} className="text-black font-medium hover:underline">
+            Verify here
           </Link>
         </p>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -8,18 +8,24 @@ import { api } from "@/lib/api";
 
 export default function CheckoutPage() {
   const { items, total, clearCart } = useCart();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!user) {
-    router.push("/login");
-    return null;
-  }
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login");
+    }
+  }, [user, authLoading, router]);
 
-  if (items.length === 0) {
-    router.push("/cart");
+  useEffect(() => {
+    if (!authLoading && items.length === 0) {
+      router.push("/cart");
+    }
+  }, [items.length, authLoading, router]);
+
+  if (authLoading || !user || items.length === 0) {
     return null;
   }
 

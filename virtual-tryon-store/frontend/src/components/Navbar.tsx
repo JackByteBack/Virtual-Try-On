@@ -23,6 +23,11 @@ export default function Navbar() {
             <Link href="/tryon" className="text-gray-600 hover:text-gray-900">
               Try On
             </Link>
+            {user && (
+              <Link href="/import-product" className="text-gray-600 hover:text-gray-900">
+                Import
+              </Link>
+            )}
             <Link href="/cart" className="relative text-gray-600 hover:text-gray-900">
               Cart
               {itemCount > 0 && (

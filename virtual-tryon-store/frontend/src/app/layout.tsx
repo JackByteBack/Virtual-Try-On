@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import Navbar from "@/components/Navbar";
+import Script from "next/script";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -15,6 +16,17 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <Script id="sw-unregister" strategy="beforeInteractive">{`
+          if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+              for (var registration of registrations) {
+                registration.unregister();
+              }
+            });
+          }
+        `}</Script>
+      </head>
       <body className={inter.className}>
         <AuthProvider>
           <CartProvider>

@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useAuth, getAccessToken } from "@/context/AuthContext";
 
 const VIEWS = ["front", "back", "left", "right"] as const;
 
@@ -8,6 +9,7 @@ interface PhotoUploaderProps {
 }
 
 export default function PhotoUploader({ onAvatarReady }: PhotoUploaderProps) {
+  const { user } = useAuth();
   const [files, setFiles] = useState<Record<string, File>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +19,13 @@ export default function PhotoUploader({ onAvatarReady }: PhotoUploaderProps) {
     setError(null);
 
     try {
-      const token = localStorage.getItem("token");
+      if (!user) {
+        setError("Please login to generate your avatar");
+        setLoading(false);
+        return;
+      }
+
+      const token = getAccessToken();
       if (!token) {
         setError("Please login to generate your avatar");
         setLoading(false);

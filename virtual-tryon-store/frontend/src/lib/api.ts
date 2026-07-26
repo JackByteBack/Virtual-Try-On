@@ -1,4 +1,5 @@
 import { insforge } from "@/lib/insforge";
+import { getAccessToken } from "@/context/AuthContext";
 
 export type Product = {
   id: string;
@@ -11,8 +12,6 @@ export type Product = {
   category?: string;
 };
 
-let accessToken: string | null = null;
-
 export const api = {
   auth: {
     register: async (data: { name: string; email: string; password: string }) => {
@@ -22,7 +21,6 @@ export const api = {
         name: data.name,
       });
       if (error) throw error;
-      if (authData?.accessToken) accessToken = authData.accessToken;
       return authData;
     },
     login: async (data: { email: string; password: string }) => {
@@ -31,10 +29,8 @@ export const api = {
         password: data.password,
       });
       if (error) throw error;
-      if (authData?.accessToken) accessToken = authData.accessToken;
       return authData;
     },
-    getAccessToken: () => accessToken,
   },
 
   products: {
@@ -116,10 +112,11 @@ export const api = {
       form.append("left", files.left);
       form.append("right", files.right);
 
-      if (!accessToken) throw new Error("Not authenticated");
+      const token = getAccessToken();
+      if (!token) throw new Error("Not authenticated");
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tryon/generate-avatar`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
 
@@ -128,12 +125,13 @@ export const api = {
     },
 
     fitGarment: async (avatarUrl: string, garmentModelUrl: string) => {
-      if (!accessToken) throw new Error("Not authenticated");
+      const token = getAccessToken();
+      if (!token) throw new Error("Not authenticated");
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tryon/fit-garment`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ avatarUrl, garmentModelUrl }),
       });

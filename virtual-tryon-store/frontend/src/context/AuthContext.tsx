@@ -3,6 +3,12 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { insforge } from "@/lib/insforge";
 
+let accessToken: string | null = null;
+
+export function getAccessToken() {
+  return accessToken;
+}
+
 interface User {
   id: string;
   name: string;
@@ -50,8 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function login(email: string, password: string) {
-    const { error } = await insforge.auth.signInWithPassword({ email, password });
+    const { data, error } = await insforge.auth.signInWithPassword({ email, password });
     if (error) throw error;
+    if (data?.accessToken) accessToken = data.accessToken;
     await refreshUser();
   }
 
@@ -63,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (error) throw error;
     if (data?.accessToken) {
+      accessToken = data.accessToken;
       await refreshUser();
     }
   }
@@ -71,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data, error } = await insforge.auth.verifyEmail({ email, otp });
     if (error) throw error;
     if (data?.accessToken) {
+      accessToken = data.accessToken;
       await refreshUser();
     }
   }
@@ -82,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     await insforge.auth.signOut();
+    accessToken = null;
     setUser(null);
   }
 
