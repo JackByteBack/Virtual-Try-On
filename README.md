@@ -6,7 +6,7 @@
 
 ![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)
 ![Node.js](https://img.shields.io/badge/Node.js-Express-339933?logo=node.js&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-7-47A248?logo=mongodb&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Postgres-3ECF8E?logo=supabase&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?logo=fastapi&logoColor=white)
 ![Three.js](https://img.shields.io/badge/React%20Three%20Fiber-3D-orange?logo=three.js)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
@@ -23,25 +23,29 @@ The project is split into three independently deployable services, orchestrated 
 
 ## 🏗️ Architecture
 
-| Service | Stack | Port |
-|---|---|---|
-| `frontend/` | Next.js 14, React Three Fiber, Tailwind CSS | `3000` |
-| `backend/` | Node.js, Express, TypeScript, MongoDB | `5000` |
-| `ai-service/` | Python, FastAPI, MediaPipe, trimesh | `8000` |
-| `mongo` | MongoDB 7 | `27017` |
+| Service | Stack | Port | Actually used for |
+|---|---|---|---|
+| `frontend/` | Next.js 14, React Three Fiber, Tailwind CSS | `3000` | UI, and talks **directly** to InsForge for auth/products/orders |
+| `backend/` | Node.js, Express, TypeScript, Supabase (Postgres) | `5001` | Scrape-proxy (`/api/scrape`) + try-on proxy to the AI service |
+| `ai-service/` | Python, FastAPI, MediaPipe, trimesh, PyTorch | `8000` | Avatar generation + garment fitting |
 
 ```
 Virtual-Try-On/
 └── virtual-tryon-store/
     ├── frontend/       # Next.js storefront + 3D viewer
-    ├── backend/        # Express API, auth, products, orders
+    ├── backend/        # Express API — scrape-proxy, try-on proxy (see note below)
     ├── ai-service/     # Avatar generation + garment fitting
     └── docker-compose.yml
 ```
 
+> ⚠️ **Real current split (not a to-do, this is how it actually works right now):** the frontend's `src/lib/api.ts` calls the **InsForge SDK directly** for `auth`, `products`, and `orders` — the Express backend's own `/api/auth`, `/api/products`, and `/api/orders` routes (which talk to Supabase) exist in the codebase but **aren't called by the frontend at all**. The backend is only actually hit for two things: scraping a product URL (`/api/scrape/scrape`, proxied to avoid CORS) and the try-on pipeline (`/api/tryon/*`, proxied to the AI service). The scraped product itself then gets **inserted into InsForge**, not saved via `/api/scrape/import` (which still writes to Supabase Postgres and is currently dead code).
+>
+> **Decision needed:** either (a) make InsForge the single source of truth and delete the now-unused backend routes + Supabase models, or (b) route everything back through the backend and drop the direct InsForge calls from the frontend. Right now you have both, and they're not in sync.
+
 ## ✨ Features
 
 - 🛍️ **E-commerce store** — browse products, view details, cart, checkout
+- 📦 **Product import** — paste a product URL (Amazon/Flipkart/etc.); backend scrapes name, price, images, and category, then the result is saved straight to InsForge
 - 🧍 **Virtual try-on** — upload 4 upper-body photos to generate a 3D avatar
 - 🎮 **Interactive 3D viewer** — orbit-controlled model viewer built with React Three Fiber
 - 🔐 **JWT authentication** — secure register/login with token-based sessions
@@ -80,21 +84,23 @@ npm run dev
 
 ## 📡 API Endpoints
 
-### Backend (`:5000`)
+### Backend (`:5001`)
 
-| Method | Route | Description |
-|---|---|---|
-| `POST` | `/api/auth/register` | Register new user |
-| `POST` | `/api/auth/login` | Login |
-| `GET` | `/api/products` | List products |
-| `GET` | `/api/products/:id` | Get product |
-| `POST` | `/api/products` | Create product 🔒 |
-| `POST` | `/api/orders` | Create order 🔒 |
-| `GET` | `/api/orders/me` | Get user orders 🔒 |
-| `POST` | `/api/tryon/generate-avatar` | Generate 3D avatar 🔒 |
-| `POST` | `/api/tryon/fit-garment` | Fit garment to avatar 🔒 |
+| Method | Route | Description | Called by frontend? |
+|---|---|---|---|
+| `POST` | `/api/scrape/scrape` | Scrape a product URL for name/price/images | ✅ Yes |
+| `POST` | `/api/tryon/generate-avatar` | Generate 3D avatar 🔒 | ✅ Yes |
+| `POST` | `/api/tryon/fit-garment` | Fit garment to avatar 🔒 | ✅ Yes |
+| `POST` | `/api/auth/register` | Register new user | ❌ No — frontend uses InsForge auth directly |
+| `POST` | `/api/auth/login` | Login | ❌ No — frontend uses InsForge auth directly |
+| `GET` | `/api/products` | List products | ❌ No — frontend queries InsForge directly |
+| `GET` | `/api/products/:id` | Get product | ❌ No |
+| `POST` | `/api/products` | Create product 🔒 | ❌ No |
+| `POST` | `/api/orders` | Create order 🔒 | ❌ No — frontend writes to InsForge directly |
+| `GET` | `/api/orders/me` | Get user orders 🔒 | ❌ No |
+| `POST` | `/api/scrape/import` | Save a scraped product to Supabase | ❌ No — frontend saves the scraped product to InsForge instead |
 
-🔒 = requires JWT auth
+🔒 = requires JWT auth. The "❌ No" routes are dead code as of the current frontend — safe to remove once you commit to InsForge, or wire the frontend back to them if you go the other way.
 
 ### AI Service (`:8000`)
 
@@ -108,9 +114,13 @@ npm run dev
 
 **Backend**
 ```
-MONGO_URI=          # MongoDB connection string
-AI_SERVICE_URL=      # AI service URL
-JWT_SECRET=          # JWT signing secret
+DATABASE_URL=                    # Postgres connection string (Supabase)
+NEXT_PUBLIC_SUPABASE_URL=        # Supabase project URL
+SUPABASE_ANON_KEY=               # Supabase anon/public key
+SUPABASE_SERVICE_ROLE_KEY=       # Supabase service role key (server-side only)
+AI_SERVICE_URL=                  # AI service URL
+JWT_SECRET=                      # JWT signing secret
+PORT=                            # Defaults to 5001
 ```
 
 **AI Service**
@@ -122,8 +132,24 @@ AWS_REGION=          # AWS region (optional)
 
 **Frontend**
 ```
-NEXT_PUBLIC_API_URL=  # Backend API URL
+NEXT_PUBLIC_API_URL=               # Backend URL — used only for /api/scrape and /api/tryon
+NEXT_PUBLIC_INSFORGE_URL=          # InsForge project URL — actively used (auth, products, orders)
+NEXT_PUBLIC_INSFORGE_ANON_KEY=     # InsForge anon key — actively used
 ```
+
+> `utils/supabase/*` (client.ts, server.ts, middleware.ts) and the `@supabase/supabase-js` / `@supabase/ssr` packages are still in the frontend but nothing in `src/` imports them anymore — leftover from before the InsForge move. Safe to delete once you're sure InsForge is the final choice.
+
+> ⚠️ `.env.local` is currently committed in `virtual-tryon-store/frontend/`. Untrack it (`git rm --cached virtual-tryon-store/frontend/.env.local`), add it to `.gitignore`, and rotate the InsForge keys since they've been exposed in a public repo.
+
+## ☁️ Deployment
+
+**Frontend on Vercel:** since this is a monorepo, Vercel's **Root Directory** setting must point to the folder, not a file:
+```
+virtual-tryon-store/frontend
+```
+Framework Preset should auto-detect as **Next.js** once that's set correctly. If it still shows "Other," the Root Directory value is wrong — retype it and re-save. Remember to also add the frontend env vars above under the project's Environment Variables before redeploying.
+
+**Backend / AI service:** deploy separately (Railway, Render, Fly.io, or a VPS) since they're long-running Express/FastAPI servers, not serverless functions. Point `NEXT_PUBLIC_API_URL` at wherever the backend ends up.
 
 ## 📝 Notes
 
